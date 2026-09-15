@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { prisma } from "./prisma";
 import { queueFile } from "./liquidsoap";
+import { getIcecastStatus } from "./icecast";
 
 // The broadcast scheduler. This is what actually puts approved recorded shows
 // on air - without it running, shows sit in SCHEDULED forever and listeners
@@ -66,6 +67,40 @@ export async function closeFinishedShows(now: Date) {
   }
 }
 
+/**
+ * Flip an approved live show to LIVE while its DJ is actually connected.
+ *
+ * Detection is by the presence of the Icecast live mount, which only exists
+ * while a source client is connected. Checking for *any* Icecast source would
+ * always be true, because Liquidsoap holds the stream mount open around the
+ * clock.
+ */
+export async function trackLiveShows(now: Date) {
+  const { reachable, liveConnected } = await getIcecastStatus();
+
+  // Icecast unreachable tells us nothing about who is on air - do not use it
+  // as evidence that a DJ has stopped.
+  if (!reachable || !liveConnected) return;
+
+  const { count } = await prisma.show.updateMany({
+    where: {
+      status: "SCHEDULED",
+      showType: "LIVE",
+      scheduledStart: { lte: now },
+      scheduledEnd: { gt: now },
+    },
+    data: { status: "LIVE" },
+  });
+
+  if (count > 0) {
+    console.log(`[scheduler] ${count} show(s) went LIVE`);
+  }
+
+  // Deliberately no transition back out of LIVE on disconnect: DJs drop and
+  // reconnect mid-set, and flapping the badge would be worse than leaving it
+  // on. closeFinishedShows() closes the show out at its scheduled end.
+}
+
 export function startScheduler() {
   // Next.js can evaluate instrumentation more than once in development; a
   // second cron would double-push every show to air.
@@ -76,6 +111,7 @@ export function startScheduler() {
     const now = new Date();
     try {
       await queueDueShows(now);
+      await trackLiveShows(now);
       await closeFinishedShows(now);
     } catch (err) {
       // Never let a throw kill the cron registration

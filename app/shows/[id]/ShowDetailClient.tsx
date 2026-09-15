@@ -34,12 +34,17 @@ export default function ShowDetailClient({
   show,
   isAdmin,
   isOwner,
-  icecastSourcePassword,
+  broadcast,
 }: {
   show: Show;
   isAdmin: boolean;
   isOwner: boolean;
-  icecastSourcePassword: string;
+  broadcast: {
+    host: string;
+    port: string;
+    mount: string;
+    sourcePassword: string;
+  };
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -178,19 +183,19 @@ export default function ShowDetailClient({
           <div className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-zinc-500">Server</span>
-              <code className="text-zinc-300">dj.yuenhouse.org</code>
+              <code className="text-zinc-300">{broadcast.host}</code>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-500">Port</span>
-              <code className="text-zinc-300">8000</code>
+              <code className="text-zinc-300">{broadcast.port}</code>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-500">Mount Point</span>
-              <code className="text-zinc-300">/live</code>
+              <code className="text-zinc-300">{broadcast.mount}</code>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-500">Source Password</span>
-              <code className="text-zinc-300">{icecastSourcePassword}</code>
+              <code className="text-zinc-300">{broadcast.sourcePassword}</code>
             </div>
           </div>
         </div>

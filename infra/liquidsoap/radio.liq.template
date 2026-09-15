@@ -36,12 +36,16 @@ automated = playlist(
 # in the dashboard's environment.
 scheduled = request.queue(id="scheduled")
 
-# Live DJs connect here from Mixxx over the Icecast protocol.
-live = input.harbor(
+# Live DJs connect their source client (Mixxx, butt) straight to Icecast on
+# the ${ICECAST_LIVE_MOUNT} mount; Liquidsoap consumes that mount here.
+#
+# This is deliberately NOT input.harbor. Routing live audio through Icecast
+# means the dashboard can tell whether a DJ is on air just by looking at
+# /admin/stats.xml - the mount only exists while a source is connected. With a
+# harbor the audio never touches Icecast and that state is invisible.
+live = input.http(
   id="live",
-  "live",
-  port=${HARBOR_PORT},
-  password="${ICECAST_SOURCE_PASSWORD}"
+  "http://127.0.0.1:${ICECAST_PORT}/${ICECAST_LIVE_MOUNT}"
 )
 
 # Priority chain. track_sensitive=false so a live DJ takes over immediately

@@ -32,7 +32,7 @@ export RADIO_ROOT
 export ICECAST_PORT="${ICECAST_PORT:-8000}"
 export ICECAST_MOUNT="${ICECAST_MOUNT:-stream}"
 export LIQUIDSOAP_PORT="${LIQUIDSOAP_PORT:-1234}"
-export HARBOR_PORT="${HARBOR_PORT:-8005}"
+export ICECAST_LIVE_MOUNT="${ICECAST_LIVE_MOUNT:-live}"
 export FALLBACK_DIR="${FALLBACK_DIR:-$RADIO_ROOT/fallback}"
 export ICECAST_ADMIN_EMAIL="${ICECAST_ADMIN_EMAIL:-admin@yuenhouse.org}"
 
@@ -86,7 +86,7 @@ Done.
 
   Stream      https://${STREAM_HOSTNAME}/${ICECAST_MOUNT}
   Dashboard   https://${DASHBOARD_HOSTNAME}   (deploy the app to $RADIO_ROOT/app first)
-  Mixxx       host ${STREAM_HOSTNAME}  port ${HARBOR_PORT}  mount live
+  Mixxx       host ${STREAM_HOSTNAME}  port ${ICECAST_PORT}  mount /${ICECAST_LIVE_MOUNT}
 
 Next:
   1. Drop some MP3s in $FALLBACK_DIR so the automated hours are not silent.

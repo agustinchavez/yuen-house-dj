@@ -32,13 +32,28 @@
     <hostname>${STREAM_HOSTNAME}</hostname>
 
     <listen-socket>
-        <!-- Loopback only. Caddy terminates TLS and proxies to this, so the
-             stream is reachable as https://<STREAM_HOSTNAME>/ and never on
-             plain HTTP. A page served over HTTPS cannot play an HTTP stream. -->
-        <bind-address>127.0.0.1</bind-address>
+        <!-- Reachable from outside so DJs can connect a source client: Mixxx
+             speaks the plain Icecast source protocol and cannot go through
+             Caddy's TLS. Listeners still arrive over HTTPS via Caddy, which
+             proxies to this same port on loopback - a page served over HTTPS
+             cannot play an http:// stream.
+
+             Everything here is password protected, but restricting this port
+             to known DJ addresses at the firewall is worth doing if you can. -->
+        <bind-address>0.0.0.0</bind-address>
         <port>${ICECAST_PORT}</port>
     </listen-socket>
 
+    <!-- Where DJs connect. Liquidsoap consumes this and mixes it into the
+         public stream, so listeners never point at it directly. -->
+    <mount type="normal">
+        <mount-name>/${ICECAST_LIVE_MOUNT}</mount-name>
+        <stream-name>Yuen House Radio - live input</stream-name>
+        <public>0</public>
+        <hidden>1</hidden>
+    </mount>
+
+    <!-- What listeners actually hear: Liquidsoap's output. -->
     <mount type="normal">
         <mount-name>/${ICECAST_MOUNT}</mount-name>
         <stream-name>Yuen House Radio</stream-name>

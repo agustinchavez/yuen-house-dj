@@ -33,7 +33,12 @@ export default async function ShowDetailPage({
           show={JSON.parse(JSON.stringify(show))}
           isAdmin={dj.isAdmin}
           isOwner={show.djEmail === dj.email}
-          icecastSourcePassword={process.env.ICECAST_SOURCE_PASSWORD || ""}
+          broadcast={{
+            host: process.env.STREAM_HOSTNAME || "radio.yuenhouse.org",
+            port: process.env.ICECAST_PORT || "8000",
+            mount: `/${process.env.ICECAST_LIVE_MOUNT || "live"}`,
+            sourcePassword: process.env.ICECAST_SOURCE_PASSWORD || "",
+          }}
         />
       </main>
     </div>

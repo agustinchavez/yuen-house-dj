@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 
 interface IcecastStatus {
-  listener_count: number;
-  source_connected: boolean;
-  current_title: string | null;
+  reachable: boolean;
+  // True only while a DJ's source client is connected - not merely while
+  // Liquidsoap is publishing, which is always.
+  liveConnected: boolean;
+  listenerCount: number;
+  currentTitle: string | null;
 }
 
 export default function OnAirPanel() {
@@ -33,26 +36,26 @@ export default function OnAirPanel() {
       <div className="flex items-center gap-3">
         <div
           className={`h-3 w-3 rounded-full ${
-            status?.source_connected
+            status?.liveConnected
               ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"
               : "bg-zinc-600"
           }`}
         />
         <h2 className="text-lg font-semibold text-white">
-          {status?.source_connected ? "On Air Now" : "Off Air"}
+          {status?.liveConnected ? "On Air Now" : "Off Air"}
         </h2>
       </div>
-      {status?.source_connected && (
+      {status?.liveConnected && (
         <div className="mt-3 space-y-1">
-          {status.current_title && (
-            <p className="text-sm text-zinc-300">{status.current_title}</p>
+          {status.currentTitle && (
+            <p className="text-sm text-zinc-300">{status.currentTitle}</p>
           )}
           <p className="text-sm text-zinc-500">
-            {status.listener_count} listener{status.listener_count !== 1 ? "s" : ""}
+            {status.listenerCount} listener{status.listenerCount !== 1 ? "s" : ""}
           </p>
         </div>
       )}
-      {!status?.source_connected && (
+      {!status?.liveConnected && (
         <p className="mt-3 text-sm text-zinc-500">
           No live source connected. Automated playlist is playing.
         </p>
