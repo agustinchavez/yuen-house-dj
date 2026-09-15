@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Required in production behind a reverse proxy (Caddy): without it Auth.js
+  // refuses the forwarded Host header and every auth route 500s with the
+  // generic "server configuration" page. Same fix the playlist app needed on
+  // Vercel (its commit 33828ce).
+  trustHost: true,
   providers: [
     Credentials({
       name: "Email & Password",
