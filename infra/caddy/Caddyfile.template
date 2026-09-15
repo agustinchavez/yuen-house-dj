@@ -1,0 +1,32 @@
+# Yuen House Radio - Caddy reverse proxy.
+# Caddy gets free TLS certificates automatically for both hostnames.
+
+# DJ dashboard (Next.js)
+${DASHBOARD_HOSTNAME} {
+	reverse_proxy 127.0.0.1:3000
+
+	# Audio uploads are large; do not let the proxy cut them off.
+	request_body {
+		max_size 500MB
+	}
+}
+
+# Public stream. This exists so the listener page can play the audio at all:
+# yuenhouse.org is served over HTTPS, and a browser will block an http:// audio
+# source on an https:// page as mixed content.
+${STREAM_HOSTNAME} {
+	reverse_proxy 127.0.0.1:${ICECAST_PORT} {
+		# Icecast streams forever; never buffer or time out the response.
+		flush_interval -1
+		transport http {
+			response_header_timeout 0
+			read_timeout 0
+		}
+	}
+
+	# Let the listener page on yuenhouse.org read the stream and its stats.
+	header {
+		Access-Control-Allow-Origin "https://yuenhouse.org"
+		Access-Control-Allow-Methods "GET, OPTIONS"
+	}
+}

@@ -1,0 +1,23 @@
+[Unit]
+Description=Yuen House Radio - Liquidsoap broadcast chain
+# Liquidsoap connects to Icecast as a source, so Icecast must be up first.
+After=network-online.target icecast2.service
+Wants=network-online.target
+Requires=icecast2.service
+
+[Service]
+Type=simple
+User=radio
+Group=radio
+WorkingDirectory=/srv/radio
+ExecStart=/usr/bin/liquidsoap /srv/radio/config/radio.liq
+Restart=always
+RestartSec=5
+
+# Liquidsoap holds the live harbor and the request queue in memory; a restart
+# drops whatever is on air, so give it room rather than letting the OOM killer
+# decide.
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

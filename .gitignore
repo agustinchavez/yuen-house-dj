@@ -49,3 +49,7 @@ next-env.d.ts
 # SQLite database
 *.db
 *.db-journal
+
+# infra secrets
+/infra/infra.env
+/infra/**/*.rendered

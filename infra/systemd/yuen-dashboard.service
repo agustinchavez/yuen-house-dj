@@ -1,0 +1,19 @@
+[Unit]
+Description=Yuen House Radio - DJ dashboard (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=radio
+Group=radio
+WorkingDirectory=/srv/radio/app
+EnvironmentFile=/srv/radio/config/dashboard.env
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+
+# The in-process broadcast scheduler lives here. If this unit is down, recorded
+# shows do not go to air even though Liquidsoap and Icecast are both healthy.
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,72 @@
+#!/usr/bin/env liquidsoap
+#
+# Yuen House Radio - broadcast chain (Liquidsoap 2.x)
+#
+# Priority:  live DJ (Mixxx)  >  scheduled recorded show  >  automated fallback
+#
+# This file is a TEMPLATE. infra/setup.sh renders it to radio.liq with envsubst,
+# substituting the ${...} placeholders. Do not edit the rendered file directly -
+# it contains the source password and is chmod 600.
+
+# ------------------------------------------------------------------ settings
+
+# The dashboard drives this script over telnet. Bound to loopback only: anyone
+# who can reach this port can push arbitrary files to air.
+settings.server.telnet := true
+settings.server.telnet.bind_addr := "127.0.0.1"
+settings.server.telnet.port := ${LIQUIDSOAP_PORT}
+
+settings.log.file.path := "${RADIO_ROOT}/log/liquidsoap.log"
+settings.log.level := 3
+
+# ------------------------------------------------------------------- sources
+
+# Automated hours - everything in the fallback directory, shuffled.
+# reload_mode="watch" picks up newly added files without a restart.
+automated = playlist(
+  id="automated",
+  mode="randomize",
+  reload_mode="watch",
+  "${FALLBACK_DIR}"
+)
+
+# Scheduled recorded shows. The dashboard pushes absolute file paths here at
+# air time over telnet:   scheduled.push /srv/radio/uploads/<file>
+# The queue id IS the telnet command prefix - it must match LIQUIDSOAP_QUEUE
+# in the dashboard's environment.
+scheduled = request.queue(id="scheduled")
+
+# Live DJs connect here from Mixxx over the Icecast protocol.
+live = input.harbor(
+  id="live",
+  "live",
+  port=${HARBOR_PORT},
+  password="${ICECAST_SOURCE_PASSWORD}"
+)
+
+# Priority chain. track_sensitive=false so a live DJ takes over immediately
+# instead of waiting for the current track to end.
+radio = fallback(
+  id="radio",
+  track_sensitive=false,
+  [live, scheduled, automated]
+)
+
+# Last line of defence: never let the stream go silent, even if the fallback
+# directory is empty or every source above fails.
+radio = mksafe(radio)
+
+# -------------------------------------------------------------------- output
+
+output.icecast(
+  %mp3(bitrate=128, samplerate=44100, stereo=true),
+  id="icecast_out",
+  host="127.0.0.1",
+  port=${ICECAST_PORT},
+  password="${ICECAST_SOURCE_PASSWORD}",
+  mount="${ICECAST_MOUNT}",
+  name="Yuen House Radio",
+  description="UChicago student radio",
+  url="https://yuenhouse.org",
+  radio
+)
