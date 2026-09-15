@@ -65,6 +65,19 @@ export default async function AdminPage() {
               Add or remove DJs. Promote or demote admins.
             </p>
           </Link>
+
+          <Link
+            href="/admin/stats"
+            className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 transition-colors hover:border-zinc-700"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Broadcast Stats</h2>
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">
+              Icecast listeners, live input, and whether what is scheduled is
+              actually on air.
+            </p>
+          </Link>
         </div>
       </main>
     </div>
