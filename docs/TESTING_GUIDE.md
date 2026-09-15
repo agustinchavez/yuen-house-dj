@@ -13,9 +13,18 @@
    ```
 3. Open http://localhost:3000
 
-The seed creates an admin account:
+The seed creates an admin account. For local testing, set the password
+yourself so the checklist below is reproducible:
+
+```bash
+SEED_ADMIN_PASSWORD=localdev123 npx tsx prisma/seed.ts
+```
+
 - **Email:** agustinchavez@uchicago.edu
-- **Password:** admin123
+- **Password:** whatever you passed as `SEED_ADMIN_PASSWORD`
+
+Run the seed with no password set (as you would on a server) and it generates
+a strong one and prints it once instead.
 
 ---
 
@@ -24,7 +33,7 @@ The seed creates an admin account:
 ### 1.1 Login (AUTH-01 through AUTH-04)
 - [ ] Visit `/` — redirects to `/login`
 - [ ] Enter invalid credentials — see error "Invalid email or password"
-- [ ] Log in with `agustinchavez@uchicago.edu` / `admin123` — redirects to `/dashboard`
+- [ ] Log in with `agustinchavez@uchicago.edu` and that password — redirects to `/dashboard`
 - [ ] Session persists: close and reopen the tab, still logged in (AUTH-07, 30-day JWT)
 
 ### 1.2 Session Invalidation (AUTH-06)

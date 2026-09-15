@@ -39,7 +39,42 @@ export ICECAST_ADMIN_EMAIL="${ICECAST_ADMIN_EMAIL:-admin@yuenhouse.org}"
 echo "==> Installing packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq icecast2 liquidsoap ffmpeg caddy gettext-base curl
+apt-get install -y -qq \
+  ca-certificates curl gnupg apt-transport-https \
+  debian-keyring debian-archive-keyring \
+  software-properties-common gettext-base
+
+# liquidsoap lives in Ubuntu's universe component, which is not always enabled
+if command -v add-apt-repository >/dev/null 2>&1 && grep -qi ubuntu /etc/os-release; then
+  add-apt-repository -y universe >/dev/null 2>&1 || true
+fi
+
+# Caddy is NOT in the Debian/Ubuntu archives - its own repository has to be
+# added first, or the install below fails on a stock box.
+if [[ ! -f /etc/apt/sources.list.d/caddy-stable.list ]]; then
+  echo "==> Adding the Caddy repository"
+  curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" \
+    | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" \
+    > /etc/apt/sources.list.d/caddy-stable.list
+fi
+
+apt-get update -qq
+apt-get install -y -qq icecast2 liquidsoap ffmpeg caddy
+
+# Node.js for the dashboard. Distro packages lag well behind what Next.js 16
+# needs, so take it from NodeSource.
+if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -lt 20 ]]; then
+  echo "==> Installing Node.js 22"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
+  apt-get install -y -qq nodejs
+fi
+echo "==> Installed: node $(node --version 2>/dev/null || echo MISSING)"
+
+# Record what we actually got: the .liq syntax is version sensitive, and this is
+# the first thing to check if the config fails to parse.
+echo "==> Installed: $(liquidsoap --version 2>&1 | head -1)"
+echo "==> Installed: $(icecast2 -v 2>&1 | head -1 || echo icecast2)"
 
 echo "==> Creating radio user and directories"
 id -u radio &>/dev/null || useradd --system --home "$RADIO_ROOT" --shell /usr/sbin/nologin radio
@@ -60,7 +95,14 @@ chown radio:radio "$RADIO_ROOT/config/radio.liq"
 chown icecast2:icecast /etc/icecast2/icecast.xml
 
 echo "==> Installing systemd units"
-cp "$HERE/systemd/yuen-liquidsoap.service" "$HERE/systemd/yuen-dashboard.service" /etc/systemd/system/
+cp "$HERE/systemd/yuen-liquidsoap.service" /etc/systemd/system/
+
+# Resolve npm's real path rather than assuming /usr/bin - NodeSource and nvm
+# put it elsewhere, and systemd needs an absolute ExecStart.
+NPM_PATH="$(command -v npm || echo /usr/bin/npm)"
+sed "s|ExecStart=/usr/bin/npm|ExecStart=${NPM_PATH}|" \
+  "$HERE/systemd/yuen-dashboard.service" > /etc/systemd/system/yuen-dashboard.service
+
 systemctl daemon-reload
 
 echo "==> Enabling Icecast"
@@ -70,7 +112,21 @@ systemctl restart icecast2
 
 echo "==> Validating the Liquidsoap script before starting it"
 if ! sudo -u radio liquidsoap --check "$RADIO_ROOT/config/radio.liq"; then
-  echo "Liquidsoap config failed to parse - not starting the service." >&2
+  cat >&2 <<'EOT'
+
+The Liquidsoap config did not parse, so nothing was started. Nothing is broken
+on the server - only this file needs fixing.
+
+Most likely a syntax difference between Liquidsoap versions. Check the version
+printed above against the syntax in infra/liquidsoap/radio.liq.template, then:
+
+  sudo -u radio liquidsoap --check /srv/radio/config/radio.liq   # re-check
+  sudo bash infra/setup.sh                                        # re-run
+
+To narrow it down, comment out the `live` source and the fallback list entry
+that uses it: that isolates whether the problem is input.http or the rest of
+the chain.
+EOT
   exit 1
 fi
 
@@ -87,6 +143,9 @@ Done.
   Stream      https://${STREAM_HOSTNAME}/${ICECAST_MOUNT}
   Dashboard   https://${DASHBOARD_HOSTNAME}   (deploy the app to $RADIO_ROOT/app first)
   Mixxx       host ${STREAM_HOSTNAME}  port ${ICECAST_PORT}  mount /${ICECAST_LIVE_MOUNT}
+
+If a firewall is active (ufw), open: 80, 443 (listeners) and ${ICECAST_PORT} (DJs):
+  ufw allow 80,443,${ICECAST_PORT}/tcp
 
 Next:
   1. Drop some MP3s in $FALLBACK_DIR so the automated hours are not silent.

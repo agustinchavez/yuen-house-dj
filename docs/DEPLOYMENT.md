@@ -105,6 +105,64 @@ journalctl -u yuen-dashboard -f | grep scheduler             # scheduler ticking
 The dashboard should log `[scheduler] Broadcast scheduler started` on boot. If
 it does not, recorded shows will never air even though the stream sounds fine.
 
+## When something is wrong
+
+Run the preflight first — it names the broken link instead of making you guess:
+
+```bash
+cd /srv/radio/app && npm run check:broadcast
+```
+
+It checks the database, Icecast reachability, whether anything is publishing to
+the stream mount, whether Liquidsoap answers, **whether the queue name actually
+exists in the running Liquidsoap**, that the fallback directory has audio in it,
+and that ffprobe is on PATH. Exit code is non-zero if anything failed.
+
+### The Liquidsoap config will not parse
+
+`setup.sh` refuses to start anything in this case, so the server is fine — only
+the file needs fixing. Almost always a syntax difference between Liquidsoap
+versions; `setup.sh` prints the installed version when it runs.
+
+```bash
+sudo -u radio liquidsoap --check /srv/radio/config/radio.liq
+```
+
+To bisect, comment out the `live` source and its entry in the `fallback` list.
+If it then parses, the problem is `input.http`; if not, it is the rest of the
+chain. Edit the **template** in `infra/liquidsoap/`, then re-run `setup.sh` —
+the rendered file is overwritten each time.
+
+### The stream is silent
+
+In order: is anything in `FALLBACK_DIR`? Is `yuen-liquidsoap` running? Does
+Icecast list the stream mount?
+
+```bash
+systemctl status yuen-liquidsoap
+tail -50 /srv/radio/log/liquidsoap.log
+curl -s -u admin:PASSWORD http://127.0.0.1:8000/admin/stats.xml | grep mount
+```
+
+### A DJ cannot connect
+
+Their source client needs the **plain** port, not HTTPS — Mixxx cannot go
+through Caddy's TLS. Confirm port 8000 is reachable from outside
+(`nc -vz radio.yuenhouse.org 8000`) and that they are using mount `/live` with
+the source password.
+
+### Recorded shows never air
+
+The scheduler runs inside the dashboard process, not Liquidsoap. Check it
+booted:
+
+```bash
+journalctl -u yuen-dashboard | grep scheduler
+```
+
+You want `[scheduler] Broadcast scheduler started`. If it is absent, the
+dashboard is down or `instrumentation.ts` did not run.
+
 ## Gotchas
 
 - **`LIQUIDSOAP_QUEUE` must match the `request.queue` id in `radio.liq`.** The
