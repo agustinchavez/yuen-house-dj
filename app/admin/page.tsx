@@ -67,6 +67,18 @@ export default async function AdminPage() {
           </Link>
 
           <Link
+            href="/admin/fallback"
+            className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 transition-colors hover:border-zinc-700"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">24/7 Music</h2>
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">
+              Upload and manage what plays whenever no show is on the air.
+            </p>
+          </Link>
+
+          <Link
             href="/admin/stats"
             className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 transition-colors hover:border-zinc-700"
           >
