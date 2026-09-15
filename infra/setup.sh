@@ -181,14 +181,19 @@ REPO_ROOT="$(cd "$HERE/.." && pwd)"
 echo "==> Deploying the dashboard to $RADIO_ROOT/app"
 # The database, uploads and config all live OUTSIDE app/, so --delete here can
 # never touch station data. Local dev files (.env, dev.db, data/) stay behind.
+#
+# Every exclude is anchored with a leading slash: an unanchored rsync pattern
+# matches at ANY depth, and "data" once silently stripped
+# node_modules/@prisma/studio-core/dist/data/ out of the deploy.
 rsync -a --delete \
-  --exclude ".git" --exclude ".env*" --exclude "*.db" --exclude "data" \
-  --exclude "infra/infra.env" \
+  --exclude "/.git" --exclude "/.env" --exclude "/.env.*" \
+  --exclude "/dev.db" --exclude "/data" --exclude "/infra/infra.env" \
   "$REPO_ROOT"/ "$RADIO_ROOT/app/"
 chown -R radio:radio "$RADIO_ROOT/app"
 
 echo "==> Migrating the database and ensuring an admin exists"
 sudo -u radio bash -c '
+  set -e
   set -a; source "'"$RADIO_ROOT"'/config/dashboard.env"; set +a
   cd "'"$RADIO_ROOT"'/app"
   npx prisma migrate deploy
