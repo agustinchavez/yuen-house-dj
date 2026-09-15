@@ -23,10 +23,28 @@ if [[ ! -f "$HERE/infra.env" ]]; then
 fi
 set -a; source "$HERE/infra.env"; set +a
 
-: "${ICECAST_SOURCE_PASSWORD:?must be set in infra.env}"
-: "${ICECAST_ADMIN_PASSWORD:?must be set in infra.env}"
 : "${DASHBOARD_HOSTNAME:?must be set in infra.env}"
 : "${STREAM_HOSTNAME:?must be set in infra.env}"
+
+# Blank secrets are generated once and written back into infra.env, so re-runs
+# keep the same values and the operator never has to invent passwords.
+ensure_secret() {
+  local name="$1"
+  if [[ -z "${!name:-}" ]]; then
+    local value; value="$(openssl rand -hex 24)"
+    printf -v "$name" '%s' "$value"
+    if grep -q "^${name}=" "$HERE/infra.env"; then
+      sed -i "s|^${name}=.*|${name}=${value}|" "$HERE/infra.env"
+    else
+      echo "${name}=${value}" >> "$HERE/infra.env"
+    fi
+    echo "==> Generated ${name} (stored in infra/infra.env)"
+  fi
+  export "$name"
+}
+ensure_secret ICECAST_SOURCE_PASSWORD
+ensure_secret ICECAST_ADMIN_PASSWORD
+ensure_secret NEXTAUTH_SECRET
 
 export RADIO_ROOT
 export ICECAST_PORT="${ICECAST_PORT:-8000}"
@@ -76,6 +94,14 @@ echo "==> Installed: node $(node --version 2>/dev/null || echo MISSING)"
 echo "==> Installed: $(liquidsoap --version 2>&1 | head -1)"
 echo "==> Installed: $(icecast2 -v 2>&1 | head -1 || echo icecast2)"
 
+# next build needs more memory than a small VPS has; swap makes 1-2GB boxes safe
+if [[ ! -f /swapfile ]] && [[ -z "$(swapon --show --noheadings 2>/dev/null)" ]] \
+   && (( $(free -m | awk '/^Mem:/{print $2}') < 3000 )); then
+  echo "==> Adding a 2G swapfile (RAM is under 3GB)"
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  grep -q "^/swapfile" /etc/fstab || echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+
 echo "==> Creating radio user and directories"
 id -u radio &>/dev/null || useradd --system --home "$RADIO_ROOT" --shell /usr/sbin/nologin radio
 mkdir -p "$RADIO_ROOT"/{config,uploads,archive,fallback,log,db,app}
@@ -87,11 +113,23 @@ render() { envsubst < "$1" > "$2"; }
 render "$HERE/liquidsoap/radio.liq.template" "$RADIO_ROOT/config/radio.liq"
 render "$HERE/icecast/icecast.xml.template"  /etc/icecast2/icecast.xml
 render "$HERE/caddy/Caddyfile.template"      /etc/caddy/Caddyfile
+render "$HERE/dashboard.env.template"        "$RADIO_ROOT/config/dashboard.env"
+
+# Optional SMTP settings pass straight through to the app
+if [[ -n "${SMTP_HOST:-}" ]]; then
+  {
+    echo ""
+    echo "# SMTP (from infra.env)"
+    for v in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS SMTP_FROM; do
+      [[ -n "${!v:-}" ]] && echo "$v=${!v}"
+    done
+  } >> "$RADIO_ROOT/config/dashboard.env"
+fi
 
 # These files contain the source password in plaintext - there is no way around
 # that, Icecast and Liquidsoap both need it - so lock them down.
-chmod 600 "$RADIO_ROOT/config/radio.liq" /etc/icecast2/icecast.xml
-chown radio:radio "$RADIO_ROOT/config/radio.liq"
+chmod 600 "$RADIO_ROOT/config/radio.liq" /etc/icecast2/icecast.xml "$RADIO_ROOT/config/dashboard.env"
+chown radio:radio "$RADIO_ROOT/config/radio.liq" "$RADIO_ROOT/config/dashboard.env"
 chown icecast2:icecast /etc/icecast2/icecast.xml
 
 echo "==> Installing systemd units"
@@ -136,20 +174,49 @@ systemctl restart yuen-liquidsoap
 systemctl enable --now caddy
 systemctl reload caddy
 
+echo "==> Building the dashboard"
+REPO_ROOT="$(cd "$HERE/.." && pwd)"
+(cd "$REPO_ROOT" && npm ci --no-audit --no-fund && npm run build)
+
+echo "==> Deploying the dashboard to $RADIO_ROOT/app"
+# The database, uploads and config all live OUTSIDE app/, so --delete here can
+# never touch station data. Local dev files (.env, dev.db, data/) stay behind.
+rsync -a --delete \
+  --exclude ".git" --exclude ".env*" --exclude "*.db" --exclude "data" \
+  --exclude "infra/infra.env" \
+  "$REPO_ROOT"/ "$RADIO_ROOT/app/"
+chown -R radio:radio "$RADIO_ROOT/app"
+
+echo "==> Migrating the database and ensuring an admin exists"
+sudo -u radio bash -c '
+  set -a; source "'"$RADIO_ROOT"'/config/dashboard.env"; set +a
+  cd "'"$RADIO_ROOT"'/app"
+  npx prisma migrate deploy
+  npx tsx prisma/seed.ts
+'
+
+echo "==> Starting the dashboard"
+systemctl enable --now yuen-dashboard
+systemctl restart yuen-dashboard
+
 cat <<EOF
 
-Done.
+Done. The station is running.
 
   Stream      https://${STREAM_HOSTNAME}/${ICECAST_MOUNT}
-  Dashboard   https://${DASHBOARD_HOSTNAME}   (deploy the app to $RADIO_ROOT/app first)
+  Dashboard   https://${DASHBOARD_HOSTNAME}
   Mixxx       host ${STREAM_HOSTNAME}  port ${ICECAST_PORT}  mount /${ICECAST_LIVE_MOUNT}
+              (the source password is shown to each DJ on their show page)
 
-If a firewall is active (ufw), open: 80, 443 (listeners) and ${ICECAST_PORT} (DJs):
+If the seed created your admin account, its password was printed ONCE above -
+scroll up and save it now.
+
+If a firewall is active (ufw), open 80, 443 and ${ICECAST_PORT}:
   ufw allow 80,443,${ICECAST_PORT}/tcp
 
-Next:
-  1. Drop some MP3s in $FALLBACK_DIR so the automated hours are not silent.
-  2. Deploy the dashboard, then: systemctl enable --now yuen-dashboard
-  3. Check it:  curl -s https://${STREAM_HOSTNAME}/status-json.xsl | head
+Last two steps:
+  1. Drop MP3s into ${FALLBACK_DIR} - until then, unclaimed hours are silence.
+  2. Verify everything:  cd $RADIO_ROOT/app && npm run check:broadcast
 
+To deploy changes later:  git pull && sudo bash infra/setup.sh
 EOF

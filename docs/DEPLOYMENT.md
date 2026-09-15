@@ -17,48 +17,55 @@ build locally and copy the output, or take the 2 GB.
 
 ## Before you start
 
-Two DNS **A records**, both pointing at the server's IP:
+Two DNS **A records**, both pointing at the server's IP — the only
+configuration you have to invent yourself:
 
 | Host | Serves |
 | --- | --- |
 | `dj.yuenhouse.org` | this dashboard |
 | `radio.yuenhouse.org` | the public stream, and the port DJs connect to |
 
-## Provisioning
+## Provisioning — the whole thing is one script
 
 ```bash
 git clone https://github.com/agustinchavez/yuen-house-dj.git
 cd yuen-house-dj
-cp infra/infra.env.example infra/infra.env
-# fill in the hostnames and generate the two passwords:
-#   openssl rand -base64 24
+cp infra/infra.env.example infra/infra.env   # edit: just the two hostnames
 sudo bash infra/setup.sh
 ```
 
-`setup.sh` is idempotent — re-run it after editing `infra.env` to re-render the
-configs. It validates the Liquidsoap script with `liquidsoap --check` before
-starting anything, so a bad config fails during provisioning rather than as dead
-air at 8pm.
+That single run installs every package (Icecast, Liquidsoap, Caddy, Node,
+ffmpeg), adds swap on small boxes, generates any password you left blank and
+writes it back into `infra/infra.env`, renders all configs **and the app's env
+file from that one source** — so the mixer, the streaming server and the
+dashboard can never disagree about a mount name, port or password — then
+builds the dashboard, migrates the database, creates your admin account, and
+starts everything.
 
-## Deploying the dashboard
+Two things to catch in its output:
 
-```bash
-npm ci && npm run build          # build here or locally
-sudo rsync -a --delete ./ /srv/radio/app/
-sudo cp .env /srv/radio/config/dashboard.env   # see .env.example
-sudo systemctl enable --now yuen-dashboard
-```
+- Your **admin password is printed once** by the seed step — save it.
+- It validates the Liquidsoap config with `liquidsoap --check` before starting
+  anything, so a bad config fails during provisioning, not as dead air at 8pm.
 
-Point `DATABASE_URL` at `/srv/radio/db/dashboard.db`, and `UPLOADS_DIR` /
-`ARCHIVE_DIR` / `FALLBACK_DIR` at the matching `/srv/radio/*` directories.
-
-Then seed the first admin so you can log in:
+Then the last two steps it reminds you about:
 
 ```bash
-cd /srv/radio/app && npx prisma migrate deploy && npx tsx prisma/seed.ts
+# 1. give the automated hours something to play
+scp *.mp3 root@server:/srv/radio/fallback/
+# 2. verify the whole chain
+cd /srv/radio/app && npm run check:broadcast
 ```
 
-**Change the seeded password immediately** — `prisma/seed.ts` ships a known one.
+## Deploying changes later
+
+```bash
+git pull && sudo bash infra/setup.sh
+```
+
+The script is idempotent: it re-renders configs, rebuilds, and restarts. Your
+database, uploads and passwords all live outside the app directory and are
+never touched by a redeploy.
 
 ## How audio actually flows
 
