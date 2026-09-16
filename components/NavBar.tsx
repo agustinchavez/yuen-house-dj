@@ -19,6 +19,7 @@ export default function NavBar() {
     { href: "/shows/upload", label: "Upload" },
     { href: "/shows/library", label: "My Uploads" },
     { href: "/shows/history", label: "History" },
+    { href: "/guide", label: "DJ Guide" },
     { href: "/settings", label: "Settings" },
   ];
 
