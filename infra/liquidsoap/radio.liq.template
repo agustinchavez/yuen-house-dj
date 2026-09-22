@@ -30,6 +30,19 @@ automated = playlist(
   "${FALLBACK_DIR}"
 )
 
+# A track with no tags would leave the previous song's title stuck on the
+# stream forever (metadata only updates when a track HAS some), so untagged
+# files get their title from their filename.
+automated = metadata.map(
+  fun (m) ->
+    if m["title"] == "" then
+      [("title", path.remove_extension(path.basename(m["filename"])))]
+    else
+      []
+    end,
+  automated
+)
+
 # Blend rotation tracks into each other instead of hard-cutting. Deliberately
 # applied ONLY to the automated playlist: a recorded show is one long track
 # with nothing to crossfade into, and fading a live DJ would mangle their set.
