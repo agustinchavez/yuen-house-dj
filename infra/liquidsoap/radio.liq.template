@@ -30,6 +30,16 @@ automated = playlist(
   "${FALLBACK_DIR}"
 )
 
+# Blend rotation tracks into each other instead of hard-cutting. Deliberately
+# applied ONLY to the automated playlist: a recorded show is one long track
+# with nothing to crossfade into, and fading a live DJ would mangle their set.
+automated = crossfade(
+  duration=4.,
+  fade_in=3.,
+  fade_out=3.,
+  automated
+)
+
 # Scheduled recorded shows. The dashboard pushes absolute file paths here at
 # air time over telnet:   scheduled.push /srv/radio/uploads/<file>
 # The queue id IS the telnet command prefix - it must match LIQUIDSOAP_QUEUE
