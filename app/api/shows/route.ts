@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendShowRequestedEmail } from "@/lib/email";
 import { requireAuth } from "@/lib/api-auth";
 import { ShowStatus } from "@/app/generated/prisma";
 
@@ -90,6 +91,25 @@ export async function POST(req: NextRequest) {
       approvedAt: result.isAdmin ? new Date() : null,
     },
   });
+
+  // Tell every admin there is something in the queue. Fire-and-forget: a mail
+  // hiccup must never fail the DJ's request.
+  void (async () => {
+    const admins = await prisma.dJAllowlist.findMany({
+      where: { isAdmin: true },
+      select: { email: true },
+    });
+    await sendShowRequestedEmail(
+      admins.map((a) => a.email),
+      {
+        djName: show.djName,
+        title: show.title,
+        showType: show.showType,
+        scheduledStart: show.scheduledStart,
+        scheduledEnd: show.scheduledEnd,
+      }
+    );
+  })().catch((err) => console.error("[email] request notification failed:", err));
 
   return NextResponse.json(show, { status: 201 });
 }

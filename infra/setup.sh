@@ -121,7 +121,7 @@ if [[ -n "${SMTP_HOST:-}" ]]; then
     echo ""
     echo "# SMTP (from infra.env)"
     for v in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS SMTP_FROM; do
-      [[ -n "${!v:-}" ]] && echo "$v=${!v}"
+      [[ -n "${!v:-}" ]] && echo "$v=\"${!v}\""
     done
   } >> "$RADIO_ROOT/config/dashboard.env"
 fi

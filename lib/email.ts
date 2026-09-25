@@ -74,3 +74,40 @@ export async function sendShowRejectedEmail(
     ].join("\n"),
   });
 }
+
+export async function sendShowRequestedEmail(
+  to: string[],
+  opts: {
+    djName: string;
+    title: string;
+    showType: string;
+    scheduledStart: Date;
+    scheduledEnd: Date;
+  }
+) {
+  if (!transporter || to.length === 0) return;
+
+  const dateStr = opts.scheduledStart.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const time = (d: Date) =>
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+  await transporter.sendMail({
+    from: FROM,
+    to: to.join(", "),
+    subject: `New show request: "${opts.title}" from ${opts.djName}`,
+    text: [
+      `${opts.djName} requested a ${opts.showType.toLowerCase()} show.`,
+      ``,
+      `  ${opts.title}`,
+      `  ${dateStr}, ${time(opts.scheduledStart)} - ${time(opts.scheduledEnd)}`,
+      ``,
+      `Review it: ${process.env.NEXTAUTH_URL}/admin/approvals`,
+      ``,
+      `— Yuen House Radio`,
+    ].join("\n"),
+  });
+}
